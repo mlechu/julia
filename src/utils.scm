@@ -9,6 +9,7 @@
   (let ((a (assq elt alst)))
     (if a (cdr a) default)))
 
+;; See `tset` for operations on larger sets
 ;; items in `s1` and not in `s2`
 (define (diff s1 s2)
   (cond ((null? s1)         '())
@@ -93,6 +94,17 @@
     (table.foldl (lambda (k v z) (put! nt k v))
                  () t)
     nt))
+
+;; table-backed set
+(define (list->tset l) (foldl (lambda (x t) (put! t x #t)) (table) l))
+(define (tset . x) (list->tset x))
+(define (tset.put! t x) (put! t x #t))
+(define (tset.has? t m) (get t m #f))
+;; iteration happens over the second argument
+(define (tset.union! t ta) (table.foldl (lambda (k v ti) (put! ti k v)) t ta))
+(define (tset.union t ta) (tset.union! (table.clone t) ta))
+(define (tset.subtract! t ts) (table.foldl (lambda (k v ti) (if (has? ti k) (del! ti k) ti)) t ts))
+(define (tset.subtract t ts) (tset.subtract! (table.clone t) ts))
 
 ;; `any`, but call predicate on every element in order no matter what
 (define (eager-any pred lst)
