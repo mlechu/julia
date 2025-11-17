@@ -320,7 +320,7 @@ function f_nest(x)
     end
 end
 #---------------------
-slots: [slot₁/#self#(!read) slot₂/y(!read) slot₃/h_nest]
+slots: [slot₁/#self#(!read) slot₂/y slot₃/h_nest]
 1   TestMod.#f_nest#g_nest#h_nest##0
 2   (call core.getfield slot₁/#self# :x)
 3   (call core.typeof %₂)
@@ -465,7 +465,7 @@ end
 LoweringError:
 function f(::g) where {g}
     function g()
-#            ╙ ── local variable name `g` conflicts with a static parameter
+#            ╙ ── cannot overwrite a static parameter
     end
 end
 
@@ -638,7 +638,7 @@ end
 28  SourceLocation::2:14
 29  (call core.svec %₂₆ %₂₇ %₂₈)
 30  --- method core.nothing %₂₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#(!read) slot₄/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self# slot₄/y(!read)]
     1   (meta :nkw 1)
     2   TestMod.+
     3   (call core.getfield slot₁/#self# :y)

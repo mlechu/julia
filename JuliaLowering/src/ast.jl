@@ -66,7 +66,7 @@ Unique symbolic identity for a variable, constant, label, or other entity
 const IdTag = Int
 
 """
-Id for scope layers in macro expansion
+Id for scope layers in hygienic macro expansion
 """
 const LayerId = Int
 
@@ -84,6 +84,11 @@ struct ScopeLayer
     parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
     is_macro_expansion::Bool # FIXME
 end
+
+"""
+Lexical scope ID
+"""
+const ScopeId = Int
 
 #-------------------------------------------------------------------------------
 # AST creation utilities
@@ -166,7 +171,8 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
         makeleaf(graph, srcref, k; id=value, kws...)
     elseif k == K"symbolic_label"
         makeleaf(graph, srcref, k; name_val=value, kws...)
-    elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel"
+    elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
+                     use_softscope_if_toplevel"
         makeleaf(graph, srcref, k; kws...)
     else
         val = k == K"Integer" ? convert(Int,     value) :
@@ -537,14 +543,6 @@ end
 # use individual attributes but those aren't easy to add on an ad-hoc basis in
 # the middle of a pass.
 const CompileHints = Base.ImmutableDict{Symbol,Any}
-
-function CompileHints(d::Dict{Symbol, Any})
-    id = CompileHints()
-    for (k, v) in d
-        id = CompileHints(id, k, v)
-    end
-    id
-end
 
 function setmeta!(ex::SyntaxTree; kws...)
     @assert length(kws) == 1 # todo relax later ?

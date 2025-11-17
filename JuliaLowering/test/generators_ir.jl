@@ -270,12 +270,12 @@ T[(x,y) for x in xs, y in ys]
 21  (call top.not_int %₂₀)
 22  (gotoifnot %₂₁ label₄₄)
 23  slot₄/y
-24  (= slot₆/y %₂₃)
+24  (= slot₅/y %₂₃)
 25  slot₂/next
-26  (= slot₅/x (call core.getfield %₂₅ 1))
+26  (= slot₆/x (call core.getfield %₂₅ 1))
 27  (call core.getfield %₂₅ 2)
-28  slot₅/x
-29  slot₆/y
+28  slot₆/x
+29  slot₅/y
 30  (call core.tuple %₂₈ %₂₉)
 31  (gotoifnot %₅ label₃₄)
 32  (call top.push! %₇ %₃₀)

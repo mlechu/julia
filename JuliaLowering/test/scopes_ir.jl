@@ -11,7 +11,7 @@ end
 #---------------------
 1   TestMod.rhs
 2   TestMod.T
-3   (newvar slot₁/T)
+3   (newvar slot₂/T)
 4   (= slot₃/tmp %₁)
 5   slot₃/tmp
 6   (call core.isa %₅ %₂)
@@ -21,9 +21,9 @@ end
 10  (call top.convert %₂ %₉)
 11  (= slot₃/tmp (call core.typeassert %₁₀ %₂))
 12  slot₃/tmp
-13  (= slot₂/x %₁₂)
-14  (= slot₁/T 1)
-15  slot₁/T
+13  (= slot₁/x %₁₂)
+14  (= slot₂/T 1)
+15  slot₂/T
 16  (return %₁₅)
 
 ########################################
@@ -139,25 +139,22 @@ begin
     end
 end
 #---------------------
-1   (= slot₁/y (call core.Box))
-2   2
-3   slot₁/y
-4   (call core.setfield! %₃ :contents %₂)
-5   (method TestMod.f)
-6   latestworld
-7   TestMod.f
-8   (call core.Typeof %₇)
-9   (call core.svec %₈ core.Any)
-10  (call core.svec)
-11  SourceLocation::3:14
-12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+1   (= slot₁/y 2)
+2   (method TestMod.f)
+3   latestworld
+4   TestMod.f
+5   (call core.Typeof %₄)
+6   (call core.svec %₅ core.Any)
+7   (call core.svec)
+8   SourceLocation::3:14
+9   (call core.svec %₆ %₇ %₈)
+10  --- method core.nothing %₉
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
-14  latestworld
-15  TestMod.f
-16  (return %₁₅)
+11  latestworld
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # @islocal with global
@@ -231,7 +228,8 @@ end
 #---------------------
 LoweringError:
 function f(x, (x,))
-#              ╙ ── function argument name not unique
+#              ╙ ── destructured argument name `x` conflicts with a(n) argument from the same scope
+
 end
 
 ########################################
@@ -251,7 +249,8 @@ end
 #---------------------
 LoweringError:
 function f(x::x) where x
-#                      ╙ ── static parameter name not distinct from function argument
+#                      ╙ ── static parameter name `x` conflicts with a(n) argument from the same scope
+
 end
 
 ########################################
@@ -261,7 +260,8 @@ end
 #---------------------
 LoweringError:
 function f((x,), (x,))
-#                 ╙ ── function argument name not unique
+#                 ╙ ── destructured argument name `x` conflicts with a(n) local variable from the same scope
+
 end
 
 ########################################
@@ -275,7 +275,8 @@ LoweringError:
 let
     local x
     global x
-#          ╙ ── Variable `x` declared both local and global
+#          ╙ ── global variable name `x` conflicts with a(n) local variable from the same scope
+
 end
 
 ########################################
@@ -287,7 +288,8 @@ end
 LoweringError:
 function f(x)
     local x
-#         ╙ ── local variable name `x` conflicts with an argument
+#         ╙ ── local variable name `x` conflicts with a(n) argument from the same scope
+
 end
 
 ########################################
@@ -299,7 +301,8 @@ end
 LoweringError:
 function f(x)
     global x
-#          ╙ ── global variable name `x` conflicts with an argument
+#          ╙ ── global variable name `x` conflicts with a(n) argument from the same scope
+
 end
 
 ########################################
@@ -312,7 +315,8 @@ end
 LoweringError:
 function f((x,))
     global x
-#          ╙ ── Variable `x` declared both local and global
+#          ╙ ── global variable name `x` conflicts with a(n) local variable from the same scope
+
 end
 
 ########################################
@@ -324,7 +328,8 @@ end
 LoweringError:
 function f(::T) where T
     local T
-#         ╙ ── local variable name `T` conflicts with a static parameter
+#         ╙ ── local variable name `T` conflicts with a(n) static parameter from the same scope
+
 end
 
 ########################################
@@ -336,39 +341,8 @@ end
 LoweringError:
 function f(::T) where T
     global T
-#          ╙ ── global variable name `T` conflicts with a static parameter
-end
+#          ╙ ── global variable name `T` conflicts with a(n) static parameter from the same scope
 
-########################################
-# Error: Conflicting static parameter and local in nested scope
-function f(::T) where T
-    let
-        local T
-    end
-end
-#---------------------
-LoweringError:
-function f(::T) where T
-    let
-        local T
-#             ╙ ── local variable name `T` conflicts with a static parameter
-    end
-end
-
-########################################
-# Error: Conflicting static parameter and global in nested scope
-function f(::T) where T
-    let
-        global T
-    end
-end
-#---------------------
-LoweringError:
-function f(::T) where T
-    let
-        global T
-#              ╙ ── global variable name `T` conflicts with a static parameter
-    end
 end
 
 ########################################
@@ -383,7 +357,7 @@ LoweringError:
 function f(::T) where T
     let
         T = rhs
-#       ╙ ── local variable name `T` conflicts with a static parameter
+#       ╙ ── cannot overwrite a static parameter
     end
 end
 
