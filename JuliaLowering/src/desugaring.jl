@@ -86,7 +86,7 @@ function check_no_parameters(ex::SyntaxTree, msg)
 end
 
 function check_no_assignment(exs, msg="misplaced assignment statement in `[ ... ]`")
-    i = findfirst(kind(e) == K"=" for e in exs)
+    i = findfirst(kind(e) == K"=" || kind(e) == K"kw" for e in exs)
     if !isnothing(i)
         throw(LoweringError(exs[i], msg))
     end
@@ -1622,7 +1622,7 @@ function expand_named_tuple(ctx, ex, kws;
             # x  ==>  x = x
             name = to_symbol(ctx, kw)
             value = kw
-        elseif k == K"="
+        elseif k == K"kw"
             # x = a
             if kind(kw[1]) != K"Identifier" && kind(kw[1]) != K"Placeholder"
                 throw(LoweringError(kw[1], "invalid $field_name name"))
@@ -1864,7 +1864,7 @@ function remove_kw_args!(ctx, args::SyntaxList)
     for i in 1:length(args)
         arg = args[i]
         k = kind(arg)
-        if k == K"="
+        if k == K"kw"
             if isnothing(kws)
                 kws = SyntaxList(ctx)
             end
@@ -2263,7 +2263,7 @@ end
 function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw)
     ex = arg
 
-    if kind(ex) == K"="
+    if kind(ex) == K"kw"
         default = ex[2]
         ex = ex[1]
     else
@@ -2824,8 +2824,10 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
             kwcall_body_tail
         ]
     else
-        scope_nest(ctx, kw_names, kw_values, kwcall_body_tail)
+        scope_nest(ctx, has_kw_slurp ? kw_names[1:end-1] : kw_names,
+                   kw_values, kwcall_body_tail)
     end
+
     main_kwcall_typevars = trim_used_typevars(ctx, kwcall_arg_types, typevar_names, typevar_stmts)
     push!(kwcall_method_defs,
           method_def_expr(ctx, srcref, callex_srcref, kwcall_mtable,
@@ -3212,9 +3214,13 @@ function expand_arrow_arglist(ctx, arglist, arrowname)
         # https://github.com/JuliaLang/JuliaSyntax.jl/pull/522
         if k == K"block"
             @chk numchildren(arglist) == 2
+            kw = kind(arglist[2]) === K"=" ?
+                @ast(ctx, arglist[2], [K"kw" children(arglist[2])...]) :
+                arglist[2]
+
             arglist = @ast ctx arglist [K"tuple"
                 arglist[1]
-                [K"parameters" arglist[2]]
+                [K"parameters" kw]
             ]
         elseif k != K"tuple"
             arglist = @ast ctx arglist [K"tuple"
@@ -3795,7 +3801,7 @@ function _rewrite_ctor_new_calls(ctx, ex, struct_name, global_struct_name, ctor_
         )
     end
     # Rewrite a call to new()
-    kw_arg_i = findfirst(e->(k = kind(e); k == K"=" || k == K"parameters"), children(ex))
+    kw_arg_i = findfirst(e->(k = kind(e); k == K"kw" || k == K"parameters"), children(ex))
     if !isnothing(kw_arg_i)
         throw(LoweringError(ex[kw_arg_i], "`new` does not accept keyword arguments"))
     end
@@ -4113,7 +4119,7 @@ function expand_struct_def(ctx, ex, docs)
                 struct_name
                 isnothing(docs) ? nothing_(ctx, ex) : docs[1]
                 ::K"SourceLocation"(ex)
-                [K"="
+                [K"kw"
                     "field_docs"::K"Identifier"
                     [K"call" "svec"::K"core" field_docs...]
                 ]
@@ -4160,7 +4166,7 @@ end
 function expand_curly(ctx, ex)
     @assert kind(ex) == K"curly"
     check_no_parameters(ex, "unexpected semicolon in type parameter list")
-    check_no_assignment(children(ex), "misplace assignment in type parameter list")
+    check_no_assignment(children(ex), "misplaced assignment in type parameter list")
 
     typevar_stmts = SyntaxList(ctx)
     type_args = SyntaxList(ctx)
@@ -4479,7 +4485,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 throw(LoweringError(ex[end], "unexpected semicolon in tuple - use `,` to separate tuple elements"))
             end
             expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex[1])))
-        elseif any_assignment(children(ex))
+        elseif any(kind(c) == K"kw" for c in children(ex))
             expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex)))
         else
             expand_forms_2(ctx, @ast ctx ex [K"call"
@@ -4524,7 +4530,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ctx.mod               ::K"Value"
                 [K"inert" ex]
                 [K"parameters"
-                    [K"="
+                    [K"kw"
                         "expr_compat_mode"::K"Identifier"
                         ctx.expr_compat_mode::K"Bool"
                     ]
