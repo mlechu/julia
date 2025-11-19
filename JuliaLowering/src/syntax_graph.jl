@@ -1,7 +1,8 @@
 # TODO: This whole file should probably be moved to JuliaSyntax.
 import .JuliaSyntax: ParseStream, RedTreeCursor, reverse_toplevel_siblings,
     has_toplevel_siblings, _unsafe_wrap_substring, parse_julia_literal, is_trivia,
-    is_prefix_op_call, @isexpr, SyntaxHead, COLON_QUOTE, is_syntactic_operator
+    is_prefix_op_call, @isexpr, SyntaxHead, COLON_QUOTE, is_syntactic_operator,
+    lower_identifier_name
 
 const NodeId = Int
 
@@ -436,7 +437,7 @@ attrsummary(name, value::Number) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k in KSet"Identifier StrMacroName CmdMacroName" || is_operator(k) ? ex.name_val :
+    str = k == K"Identifier" || is_operator(k) ? ex.name_val :
           k == K"Placeholder" ? ex.name_val           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
@@ -611,17 +612,11 @@ function _find_SyntaxTree_macro(ex, line)
         # We're in the line range. Either
         if firstline == line && kind(c) == K"macrocall" && begin
                     name = c[1]
-                    if kind(name) == K"macro_name"
-                        name = name[1]
-                    end
                     if kind(name) == K"."
                         name = name[2]
-                        if kind(name) == K"macro_name"
-                            name = name[1]
-                        end
                     end
                     @assert kind(name) == K"Identifier"
-                    name.name_val == "SyntaxTree"
+                    name.name_val == "@SyntaxTree"
                 end
             # We find the node we're looking for. NB: Currently assuming a max
             # of one @SyntaxTree invocation per line. Though we could relax
@@ -908,6 +903,23 @@ function _green_to_ast(ex::SyntaxTree; eq_to_kw=false)
         cs[1]
     elseif k === K"=" && eq_to_kw
         makenode(graph, ex, ex, _map_green_to_ast(children(ex)); kind=K"kw")
+    elseif k === K"CmdMacroName" || k === K"StrMacroName"
+        name = lower_identifier_name(ex.name_val, k)
+        makeleaf(graph, ex, K"Identifier"; name_val=name)
+    elseif k === K"macro_name"
+        # M.@x parses to (. M (macro_name x))
+        # @M.x parses to (macro_name (. M x))
+        # We want (. M @x) (both identifiers) in either case
+        @assert numchildren(ex) === 2 && kind(ex[1]) === K"@"
+        id = ex[2]
+        if kind(id) === K"."
+            name_val = lower_identifier_name(id[2].name_val, K"macro_name")
+            name = makeleaf(graph, ex, K"Identifier"; name_val)
+            makenode(graph, ex, ex, [id[1], name])
+        else
+            name_val = lower_identifier_name(id.name_val, K"macro_name")
+            makeleaf(graph, ex, K"Identifier"; name_val)
+        end
     elseif is_leaf(ex)
         return ex
     else
