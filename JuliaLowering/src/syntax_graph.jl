@@ -99,11 +99,8 @@ function newnode!(graph::SyntaxGraph)
     return length(graph.edge_ranges)
 end
 
-function setchildren!(graph::SyntaxGraph, id, children::NodeId...)
-    setchildren!(graph, id, children)
-end
-
-function setchildren!(graph::SyntaxGraph, id, children)
+function setchildren!(graph::SyntaxGraph, id::NodeId,
+                      children::AbstractVector{NodeId})
     n = length(graph.edges)
     graph.edge_ranges[id] = n+1:(n+length(children))
     # TODO: Reuse existing edges if possible
@@ -147,12 +144,11 @@ function hasattr(graph::SyntaxGraph, name::Symbol)
 end
 
 # TODO: Probably terribly non-inferable?
-function setattr!(graph::SyntaxGraph, id; attrs...)
-    for (k,v) in pairs(attrs)
-        if !isnothing(v)
-            getattr(graph, k)[id] = v
-        end
+function setattr!(graph::SyntaxGraph, id, k::Symbol, @nospecialize(v))
+    if !isnothing(v)
+        getattr(graph, k)[id] = v
     end
+    nothing
 end
 
 function deleteattr!(graph::SyntaxGraph, id::NodeId, name::Symbol)
@@ -167,32 +163,20 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     return getattr(graph, name)
 end
 
-function sethead!(graph, id::NodeId, h::JuliaSyntax.SyntaxHead)
-    sethead!(graph, id, kind(h))
-    setflags!(graph, id, flags(h))
-end
-
-function sethead!(graph, id::NodeId, k::Kind)
-    graph.kind[id] = k
-end
-
-function setflags!(graph, id::NodeId, f::UInt16)
-    graph.syntax_flags[id] = f
-end
-
 function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
     id = newnode!(graph)
-    sethead!(graph, id, head(node))
+    setattr!(graph, id, :kind, kind(node))
+    setattr!(graph, id, :syntax_flags, flags(node))
     if !isnothing(node.val)
         v = node.val
         if v isa Symbol
             # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
-            setattr!(graph, id, name_val=string(v))
+            setattr!(graph, id, :name_val, string(v))
         else
-            setattr!(graph, id, value=v)
+            setattr!(graph, id, :value, v)
         end
     end
-    setattr!(graph, id, source=SourceRef(node.source, node.position, node.raw))
+    setattr!(graph, id, :source, SourceRef(node.source, node.position, node.raw))
     if !is_leaf(node)
         cs = map(children(node)) do n
             _convert_nodes(graph, n)
@@ -201,7 +185,7 @@ function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
     end
     return id
 end
-
+# x
 """
     syntax_graph(ctx)
 
@@ -242,8 +226,9 @@ function Base.getproperty(ex::SyntaxTree, name::Symbol)
     end
 end
 
-function Base.setproperty!(ex::SyntaxTree, name::Symbol, val)
-    return setattr!(ex._graph, ex._id; name=>val)
+function Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+    setattr!(ex._graph, ex._id, name, val)
+    val
 end
 
 function Base.propertynames(ex::SyntaxTree)
@@ -281,22 +266,19 @@ function copy_node(ex::SyntaxTree)
     graph = syntax_graph(ex)
     id = newnode!(graph)
     if !is_leaf(ex)
-        setchildren!(graph, id, _node_ids(graph, children(ex)...))
+        setchildren!(graph, id, children(ex._graph, ex._id))
     end
     ex2 = SyntaxTree(graph, id)
     copy_attrs!(ex2, ex, true)
     ex2
 end
 
-function setattr(ex::SyntaxTree; extra_attrs...)
-    ex2 = copy_node(ex)
-    setattr!(ex2; extra_attrs...)
-    ex2
+function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+    setattr!(ex._graph, ex._id, name, val)
+    ex
 end
-
-function setattr!(ex::SyntaxTree; attrs...)
-    setattr!(ex._graph, ex._id; attrs...)
-end
+setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
+    setattr!(copy_node(ex), name, val)
 
 function deleteattr!(ex::SyntaxTree, name::Symbol)
     deleteattr!(ex._graph, ex._id, name)
@@ -725,8 +707,13 @@ end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
 SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
+SyntaxList(ctx, v::Vector{SyntaxTree}) =
+    SyntaxList(syntax_graph(ctx), NodeId[x._id for x in v])
 
 syntax_graph(lst::SyntaxList) = lst.graph
+
+setchildren!(graph::SyntaxGraph, id::NodeId, children::SyntaxList) =
+    setchildren!(graph, id, children.ids)
 
 Base.size(v::SyntaxList) = size(v.ids)
 

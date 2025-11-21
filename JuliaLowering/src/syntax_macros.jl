@@ -18,7 +18,7 @@
 function _apply_nospecialize(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
-        setmeta(ex; nospecialize=true)
+        setmeta(ex, :nospecialize, true)
     elseif k == K"..." || k == K"::" || k == K"="
         if k == K"::" && numchildren(ex) == 1
             ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
