@@ -82,7 +82,7 @@ A where X < Y < Z
 #---------------------
 LoweringError:
 A where X < Y < Z
-#       └───────┘ ── invalid type bounds
+#       └───────┘ ── expected `lb <: type_name <: ub` or `ub >: type_name >: lb`
 
 ########################################
 # Error: bad type bounds
@@ -90,7 +90,7 @@ A where X <: f() <: Z
 #---------------------
 LoweringError:
 A where X <: f() <: Z
-#            └─┘ ── expected type name
+#            └─┘ ── expected identifier
 
 ########################################
 # Error: bad type bounds
@@ -98,7 +98,7 @@ A where f() <: Y
 #---------------------
 LoweringError:
 A where f() <: Y
-#       └─┘ ── expected type name
+#       └─┘ ── expected identifier
 
 ########################################
 # Error: bad type bounds
@@ -163,7 +163,7 @@ X{S, T; W}
 #---------------------
 LoweringError:
 X{S, T; W}
-#     └─┘ ── unexpected semicolon in type parameter list
+#     └─┘ ── unexpected semicolon
 
 ########################################
 # Error: assignment in type application
@@ -256,7 +256,7 @@ abstract type A(){T} end
 #---------------------
 LoweringError:
 abstract type A(){T} end
-#             └────┘ ── invalid type signature
+#             └─┘ ── expected identifier
 
 ########################################
 # Error: Abstract type definition with bad signature
@@ -264,7 +264,7 @@ abstract type A() <: B end
 #---------------------
 LoweringError:
 abstract type A() <: B end
-#            └───────┘ ── invalid type signature
+#             └─┘ ── expected identifier
 
 ########################################
 # Error: Abstract type definition in function scope
@@ -275,7 +275,7 @@ end
 LoweringError:
 function f()
     abstract type A end
-#   └─────────────────┘ ── this syntax is only allowed in top level code
+#   └─────────────────┘ ── this syntax is only allowed at top level
 end
 
 ########################################
@@ -640,54 +640,50 @@ struct X
     b
 end
 #---------------------
-1   (call core.declare_global TestMod :X false)
-2   latestworld
-3   (call core.svec)
-4   (call core.svec :a :b)
-5   (call core.svec)
-6   (call core._structtype TestMod :X %₃ %₄ %₅ false 2)
-7   (= slot₁/X %₆)
-8   (call core._setsuper! %₆ core.Any)
-9   (call core.isdefinedglobal TestMod :X false)
-10  (gotoifnot %₉ label₁₄)
-11  TestMod.X
-12  (= slot₂/if_val (call core._equiv_typedef %₁₁ %₆))
-13  (goto label₁₅)
-14  (= slot₂/if_val false)
-15  slot₂/if_val
-16  (gotoifnot %₁₅ label₂₀)
-17  TestMod.X
-18  (= slot₃/if_val %₁₇)
-19  (goto label₂₁)
-20  (= slot₃/if_val false)
-21  slot₃/if_val
-22  (gotoifnot %₁₅ label₂₃)
-23  (call core.svec core.Any core.Any)
-24  (call core._typebody! %₂₁ %₆ %₂₃)
-25  (call core.declare_const TestMod :X %₂₄)
-26  latestworld
-27  TestMod.X
-28  (call core.apply_type core.Type %₂₇)
-29  (call core.svec %₂₈ core.Any core.Any)
-30  (call core.svec)
-31  SourceLocation::4:1
-32  (call core.svec %₂₉ %₃₀ %₃₁)
-33  --- method core.nothing %₃₂
-    slots: [slot₁/#self#(!read) slot₂/a slot₃/b]
-    1   TestMod.X
-    2   (new %₁ slot₂/a slot₃/b)
-    3   (return %₂)
-34  latestworld
-35  JuliaLowering.bind_docs!
-36  (call core.tuple :field_docs)
-37  (call core.apply_type core.NamedTuple %₃₆)
-38  (call core.svec 1 "field a docs" 2 "field b docs")
-39  (call core.tuple %₃₈)
-40  (call %₃₇ %₃₉)
-41  TestMod.X
-42  SourceLocation::4:1
-43  (call core.kwcall %₄₀ %₃₅ %₄₁ "X docs\n" %₄₂)
-44  (return core.nothing)
+1   (newvar slot₁/val)
+2   (call core.declare_global TestMod :X false)
+3   latestworld
+4   (call core.svec)
+5   (call core.svec :a :b)
+6   (call core.svec)
+7   (call core._structtype TestMod :X %₄ %₅ %₆ false 2)
+8   (= slot₂/X %₇)
+9   (call core._setsuper! %₇ core.Any)
+10  (call core.isdefinedglobal TestMod :X false)
+11  (gotoifnot %₁₀ label₁₅)
+12  TestMod.X
+13  (= slot₃/if_val (call core._equiv_typedef %₁₂ %₇))
+14  (goto label₁₆)
+15  (= slot₃/if_val false)
+16  slot₃/if_val
+17  (gotoifnot %₁₆ label₂₁)
+18  TestMod.X
+19  (= slot₄/if_val %₁₈)
+20  (goto label₂₂)
+21  (= slot₄/if_val false)
+22  slot₄/if_val
+23  (gotoifnot %₁₆ label₂₄)
+24  (call core.svec core.Any core.Any)
+25  (call core._typebody! %₂₂ %₇ %₂₄)
+26  (call core.declare_const TestMod :X %₂₅)
+27  latestworld
+28  (= slot₁/val core.nothing)
+29  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree X))
+30  (call Base.Docs.Binding TestMod %₂₉)
+31  (call Core.svec "X docs\n")
+32  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree a))
+33  (call Pair{Symbol, Any} %₃₂ "field a docs")
+34  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree b))
+35  (call Pair{Symbol, Any} %₃₄ "field b docs")
+36  (call Dict{Symbol, Any} %₃₃ %₃₅)
+37  (call Pair :fields %₃₆)
+38  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₇)
+39  (call Base.Docs.docstr %₃₁ %₃₈)
+40  TestMod.Union
+41  (call core.apply_type %₄₀)
+42  (call Base.Docs.doc! TestMod %₃₀ %₃₉ %₄₁)
+43  slot₁/val
+44  (return %₄₃)
 
 ########################################
 # Struct with outer constructor
@@ -998,10 +994,7 @@ end
     2   (new %₁ slot₂/a)
     3   (return %₂)
 78  latestworld
-79  TestMod.X
-80  (call core.apply_type core.Type %₇₉)
-81  (call JuliaLowering.bind_docs! %₈₀ "Docs for X constructor\n" %₇₆)
-82  (return core.nothing)
+79  (return core.nothing)
 
 ########################################
 # User defined inner constructors and helper functions for structs with type params
@@ -1316,7 +1309,7 @@ function f()
 #   ┌───────
     struct X
     end
-#─────┘ ── this syntax is only allowed in top level code
+#─────┘ ── this syntax is only allowed at top level
 end
 
 ########################################
