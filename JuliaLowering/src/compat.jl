@@ -399,13 +399,8 @@ function est_to_dst(st::SyntaxTree)
                 @ast g st [K"function" rec(l) rec(r)]
             end
         end
-        [K"do" [K"call" f args...] [K"->" do_args do_body]] -> let
-            # Note desugaring expects first-arg do-expression, unlike RawGreenNode
-            @ast g st [K"call"
-                rec(f)
-                @ast g st[end] [K"do" rec(do_args) rec(do_body)]
-                _dst_sink_parameters(args)...
-            ]
+        [K"do" [K"call" f args...] lam] -> let
+            @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
             @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]

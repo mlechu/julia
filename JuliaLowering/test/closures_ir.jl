@@ -481,9 +481,9 @@ end
 5   (call %₃ %₄)
 6   (call core.svec)
 7   (call core.svec)
-8   (call JuliaLowering.eval_closure_type TestMod :#do##0 %₆ %₇)
+8   (call JuliaLowering.eval_closure_type TestMod :#->##1 %₆ %₇)
 9   latestworld
-10  TestMod.#do##0
+10  TestMod.#->##1
 11  (call core.svec %₁₀ core.Any)
 12  (call core.svec)
 13  SourceLocation::1:13
@@ -494,7 +494,7 @@ end
     2   (call %₁ slot₂/y 2)
     3   (return %₂)
 16  latestworld
-17  TestMod.#do##0
+17  TestMod.#->##1
 18  (new %₁₇)
 19  TestMod.x
 20  (call core.kwcall %₅ %₁ %₁₈ %₁₉)
@@ -981,12 +981,12 @@ end
 5   (call core.setfield! %₄ :contents %₃)
 6   (call core.svec :y)
 7   (call core.svec true)
-8   (call JuliaLowering.eval_closure_type TestMod :#->##1 %₆ %₇)
+8   (call JuliaLowering.eval_closure_type TestMod :#->##2 %₆ %₇)
 9   latestworld
-10  TestMod.#->##1
+10  TestMod.#->##2
 11  slot₁/y
 12  (new %₁₀ %₁₁)
-13  TestMod.#->##1
+13  TestMod.#->##2
 14  (call core.svec %₁₃)
 15  (call core.svec)
 16  SourceLocation::5:5
@@ -1110,6 +1110,6 @@ end
 LoweringError:
 #= line 1 =# - Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
 Expression:
-  (call JuliaLowering.eval_closure_type Main.TestMod :#->##2 (call core.svec) (call core.svec))
+  (call JuliaLowering.eval_closure_type Main.TestMod :#->##3 (call core.svec) (call core.svec))
 Containing expressions:
-  (call JuliaLowering.eval_closure_type Main.TestMod :#->##2 (call core.svec) (call core.svec))
+  (call JuliaLowering.eval_closure_type Main.TestMod :#->##3 (call core.svec) (call core.svec))
