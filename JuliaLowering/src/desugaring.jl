@@ -4861,9 +4861,15 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # Assume user macros may produce this, but static_eval means desugaring
         # has already occurred.
         args = SyntaxList(ctx)
-        for c in ex[2:end]
-            push!(args, kind(c) === K"static_eval" ? c :
-                @ast ctx ex [K"static_eval" expand_forms_2(ctx, c)])
+        for i in 2:numchildren(ex)
+            c = ex[i]
+            if kind(c) === K"static_eval"
+                push!(args, c)
+            elseif i <= 3
+                push!(args, @ast ctx ex [K"static_eval" expand_forms_2(ctx, c)])
+            else
+                push!(args, expand_forms_2(ctx, c))
+            end
         end
         @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
     elseif k == K"gc_preserve"
@@ -4926,5 +4932,9 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
         throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, false))
     end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
+    if DEBUG
+        vr = valid_st2(ex_out)
+        !vr.ok && throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, true))
+    end
     ctx_out, ex_out
 end
