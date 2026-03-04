@@ -4737,7 +4737,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         end
     elseif k == K"generator"
         expand_forms_2(ctx, expand_generator(ctx, ex))
-    elseif k == K"->" || k == K"do"
+    elseif k == K"->"
         expand_arrow(ctx, ex)
     elseif k == K"function" || k == K"generated_function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
