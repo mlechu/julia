@@ -325,9 +325,6 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                 [K"iteration"(st[1]) mapsyntax(_dst_eq_to_in, iters)...]
                 rec(body)
             ]
-        ([K"where" t tds...],
-         when=!(length(tds) === 1 && kind(tds[1]) === K"braces")) ->
-             @ast g st [K"where" rec(t) [K"braces" mapsyntax(rec, tds)...]]
         (_, when=(k = kind(st); k in KSet"tuple vect braces")) ->
             @ast g st [k _dst_sink_parameters(children(st))...]
         (_, when=(k = kind(st); k in KSet"curly ref")) ->

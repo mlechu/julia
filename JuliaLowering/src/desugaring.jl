@@ -1262,7 +1262,7 @@ function expand_unionall_def(ctx, srcref, lhs, rhs, is_const=true)
     expand_forms_2(
         ctx,
         @ast ctx srcref [K"block"
-            rr := [K"where" rhs [K"braces" lhs[2:end]...]]
+            rr := [K"where" rhs lhs[2:end]...]
             [is_const ? K"constdecl" : K"assign_or_constdecl_if_global" name rr]
             [K"removable" rr]
         ]
@@ -2352,20 +2352,20 @@ end
 # - `new_typevar_stmts` is the list of statements which needs to to be emitted
 #   prior to uses of `typevar_names`.
 function _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, ex)
-    if kind(ex) == K"where" && numchildren(ex) == 2
-        vars_kind = kind(ex[2])
-        if vars_kind == K"_typevars"
-            append!(typevar_names, children(ex[2][1]))
-            append!(typevar_stmts, children(ex[2][2]))
-        else
-            params = vars_kind == K"braces" ? ex[2][1:end] : ex[2:2]
-            n_existing = length(new_typevar_stmts)
-            expand_typevars!(ctx, typevar_names, new_typevar_stmts, params)
-            append!(typevar_stmts, view(new_typevar_stmts, n_existing+1:length(new_typevar_stmts)))
+    @stm ex begin
+        [K"where" body [K"_typevars" [K"block" names...] [K"block" stmts...]]] -> begin
+            append!(typevar_names, names)
+            append!(typevar_stmts, stmts)
+            _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, body)
         end
-        _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, ex[1])
-    else
-        ex
+        [K"where" body tvs...] -> begin
+            n_existing = length(new_typevar_stmts)
+            expand_typevars!(ctx, typevar_names, new_typevar_stmts, tvs)
+            append!(typevar_stmts,
+                    view(new_typevar_stmts, n_existing+1:length(new_typevar_stmts)))
+            _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, body)
+        end
+        _ -> ex
     end
 end
 
@@ -3228,7 +3228,7 @@ function expand_arrow_arglist(ctx, arglist, arrowname)
     if k == K"where"
         @ast ctx arglist [K"where"
             expand_arrow_arglist(ctx, arglist[1], arrowname)
-            arglist[2]
+            arglist[2:end]...
         ]
     else
         @ast ctx arglist [K"call"
@@ -4414,23 +4414,16 @@ function expand_where(ctx, srcref, lhs, rhs)
 end
 
 function expand_wheres(ctx, ex)
-    @jl_assert numchildren(ex) == 2 ex
     body = ex[1]
-    rhs = ex[2]
-    if kind(rhs) == K"braces"
-        # S{X,Y} where {X,Y}
-        for r in reverse(children(rhs))
-            body = expand_where(ctx, ex, body, r)
-        end
-    elseif kind(rhs) == K"_typevars"
-        # Eg, `S{X,Y} where {X, Y}` but with X and Y
-        # already allocated `TypeVar`s
-        for r in reverse(children(rhs[1]))
-            body = @ast ctx ex [K"call" "UnionAll"::K"core" r body]
-        end
-    else
-        # S{X} where X
-        body = expand_where(ctx, ex, body, rhs)
+    @stm ex begin
+        [K"where" _ [K"_typevars" [K"block" names...] [K"block" stmts...]]] ->
+            for n in reverse(names)
+                body = @ast ctx ex [K"call" "UnionAll"::K"core" n body]
+            end
+        [K"where" _ tvs...] ->
+            for v in reverse(tvs)
+                body = expand_where(ctx, ex, body, v)
+            end
     end
     body
 end
@@ -4775,8 +4768,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         end
     elseif k == K"where"
         expand_forms_2(ctx, expand_wheres(ctx, ex))
-    elseif k == K"braces" || k == K"bracescat"
-        throw(LoweringError(ex, "{ } syntax is reserved for future use"))
     elseif k == K"string"
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
