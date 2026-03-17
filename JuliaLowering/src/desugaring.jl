@@ -2358,20 +2358,6 @@ function scope_nest(ctx, assigns, body)
     body
 end
 
-# Check valid identifier/function names
-function is_invalid_func_name(ex)
-    k = kind(ex)
-    if k == K"Identifier"
-        name = ex.name_val
-    elseif k == K"." && numchildren(ex) == 2 && kind(ex[2]) == K"Symbol"
-        # `function A.f(x,y) ...`
-        name = ex[2].name_val
-    else
-        return true
-    end
-    return is_ccall_or_cglobal(name)
-end
-
 function pos_req_args(argl::SyntaxList)
     last = lastindex(argl)
     for i in eachindex(argl)
@@ -4476,10 +4462,6 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
         push!(res, expand_forms_2(ctx, e))
     end
     res
-end
-
-function expand_forms_2(ctx::StatementListCtx, args...)
-    expand_forms_2(ctx.ctx, args...)
 end
 
 ensure_desugaring_attributes!(graph) = ensure_attributes!(
