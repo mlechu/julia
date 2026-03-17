@@ -2563,7 +2563,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     methods = SyntaxList(ctx.graph)
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
-        wrapper_body = if all((<=)(i), deps[i+1:end])
+        wrapper_body = if all((<)(i), deps[i+1:end])
             # fill-all-defaults case.  note that the final default may be a
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)

@@ -236,7 +236,7 @@ end
 f_return_in_interpolation()
 """) === 123
 
-@testset "Default positional arguments" begin
+@testset "Optional positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_def_simple(x=1, y=2, z=x)
@@ -246,6 +246,38 @@ f_return_in_interpolation()
         (f_def_simple(), f_def_simple(10), f_def_simple(10,20), f_def_simple(10,20,30))
     end
     """) == ((1,2,1), (10,2,10), (10,20,10), (10,20,30))
+
+    # anon forms
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))()") == (1,2,3,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0)") == (0,2,3,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0,0)") == (0,0,3,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0,0,0)") == (0,0,0,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0,0,0,0)") == (0,0,0,(0,))
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)()") == (1,2,3,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0)") == (0,2,3,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0,0)") == (0,0,3,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0,0,0)") == (0,0,0,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0,0,0,0)") == (0,0,0,(0,))
+
+    # defaults containing previous args
+    @test JL.include_string(test_mod, "((x=1,y=x,z=x,va...=x)->(x,y,z,va))()") == (1,1,1,(1,))
+    @test JL.include_string(test_mod, "((x=1,y=x,z=x,va...=x)->(x,y,z,va))(2)") == (2,2,2,(2,))
+    @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))()") == (1,1,2,(4,))
+    @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))(2)") == (2,2,4,(8,))
+    # defaults containing previous sparams
+    @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))()") == (1, Int, Int)
+    @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))(true)") == (true, Bool, Bool)
+    @test JL.include_string(test_mod, "(((x::Type{T}=Vector{Int},y=T) where T)->(x,y,T))()") ==
+        (Vector{Int}, Vector{Int}, Vector{Int})
+    @test JL.include_string(test_mod, "(((x::Type{T}=Vector{Int},y=T) where T)->(x,y,T))(Bool)") ==
+        (Bool, Bool, Bool)
+    # https://github.com/JuliaLang/JuliaLowering.jl/issues/158
+    @test JL.include_string(
+        test_mod, "(((::Type{T}=Vector{UInt8}, sz=Base.aligned_sizeof(eltype(T))) where T)->sz)()") ==
+            1
+    @test JL.include_string(
+        test_mod, "(((::Type{T}=Vector{UInt8}, sz=Base.aligned_sizeof(eltype(T))) where T)->sz)(Int32)") ==
+            4
 
     @test JuliaLowering.include_string(test_mod, """
     begin
@@ -605,6 +637,21 @@ end
     @test values(test_mod.f_kw_default_dependencies()) === (1, 1, :outer, :aaa_kw, :aaa_kw)
     @test values(test_mod.f_kw_default_dependencies(x = 10)) === (10, 10, :outer, :aaa_kw, :aaa_kw)
     @test values(test_mod.f_kw_default_dependencies(x = 10, aaa=:blah)) === (10, 10, :outer, :blah, :blah)
+
+    # depend on positional args
+    @test JuliaLowering.include_string(test_mod, """
+    function f_kw_pos_dependencies(p1, o1=1, va...; kw1=p1, kw2=o1, kw3=va)
+        (p1, o1, va..., kw1, kw2, kw3...)
+    end
+    """) isa Function
+    @test test_mod.f_kw_pos_dependencies('p', 'o', 'v', 'v') ==
+        ('p', 'o', 'v', 'v', 'p', 'o', 'v', 'v')
+    @test test_mod.f_kw_pos_dependencies('p', 'o', 'v') ==
+        ('p', 'o', 'v', 'p', 'o', 'v')
+    @test test_mod.f_kw_pos_dependencies('p', 'o') ==
+        ('p', 'o', 'p', 'o')
+    @test test_mod.f_kw_pos_dependencies('p') ==
+        ('p', 1, 'p', 1)
 
     # Keywords with static parameters
     JuliaLowering.include_string(test_mod, """
