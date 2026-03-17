@@ -3016,29 +3016,6 @@ end
 #-------------------------------------------------------------------------------
 # Expand type definitions
 
-# Match `x<:T<:y` etc, returning `(name, lower_bound, upper_bound)`
-# A bound is `nothing` if not specified
-function analyze_typevar(ctx, ex)
-    k = kind(ex)
-    if k == K"Identifier"
-        (ex, nothing, nothing)
-    elseif k == K"comparison" && numchildren(ex) == 5
-        kind(ex[3]) == K"Identifier" || throw(LoweringError(ex[3], "expected type name"))
-        if !((kind(ex[2]) == K"Identifier" && ex[2].name_val == "<:") &&
-             (kind(ex[4]) == K"Identifier" && ex[4].name_val == "<:"))
-            throw(LoweringError(ex, "invalid type bounds"))
-        end
-        # a <: b <: c
-        (ex[3], ex[1], ex[5])
-    elseif k == K"<:" && numchildren(ex) == 2
-        kind(ex[1]) == K"Identifier" || throw(LoweringError(ex[1], "expected type name"))
-        (ex[1], nothing, ex[2])
-    elseif k == K">:" && numchildren(ex) == 2
-        kind(ex[2]) == K"Identifier" || throw(LoweringError(ex[2], "expected type name"))
-        (ex[1], ex[2], nothing)
-    end
-end
-
 # argument to where expression -> (_typevar name expanded_lb expanded_ub)
 # used, e.g. in all `sparams`, where flisp generally uses a list (name, lb, ub)
 function typevar_bounds(ctx, ex)
@@ -3054,20 +3031,12 @@ function typevar_bounds(ctx, ex)
     @ast ctx ex [K"_typevar" name expand_forms_2(ctx, lb) expand_forms_2(ctx, ub)]
 end
 
-bounds_to_typevar(ctx, ex) = @stm ex begin
-    [K"_typevar" name lb ub] -> if is_core_Any(lb) && is_core_Any(ub)
-        @ast ctx ex [K"call" "TypeVar"::K"core" name=>K"Symbol"]
-    elseif is_core_Any(lb)
-        @ast ctx ex [K"call" "TypeVar"::K"core"
-            name=>K"Symbol" expand_forms_2(ctx, ub)]
-    else
-        @ast ctx ex [K"call" "TypeVar"::K"core"
-            name=>K"Symbol" expand_forms_2(ctx, lb) expand_forms_2(ctx, ub)]
-    end
+function bounds_to_typevar(ctx, ex)
+    @jl_assert kind(ex) === K"_typevar" ex
+    _bounds_to_typevar(ctx, ex, ex[1], ex[2], ex[3])
 end
 
-function bounds_to_TypeVar(ctx, srcref, bounds)
-    name, lb, ub = bounds
+function _bounds_to_typevar(ctx, srcref, name, lb, ub)
     # Generate call to one of
     # TypeVar(name)
     # TypeVar(name, ub)
@@ -3075,10 +3044,10 @@ function bounds_to_TypeVar(ctx, srcref, bounds)
     @ast ctx srcref [K"call"
         "TypeVar"::K"core"
         name=>K"Symbol"
-        lb
-        if isnothing(ub) && !isnothing(lb)
-            "Any"::K"core"
-        else
+        if !is_core_Any(lb)
+            lb
+        end
+        if !is_core_Any(lb) || !is_core_Any(ub)
             ub
         end
     ]
@@ -3125,12 +3094,12 @@ end
 #   There is exactly one statement from each typevar.
 function expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
     for param in type_params
-        bounds = analyze_typevar(ctx, param)
+        bounds = typevar_bounds(ctx, param)
         n = bounds[1]
         push!(typevar_names, n)
         push!(typevar_stmts, @ast ctx param [K"block"
             [K"local" n]
-            [K"=" n bounds_to_TypeVar(ctx, param, bounds)]
+            [K"=" n bounds_to_typevar(ctx, bounds)]
         ])
     end
     return nothing
@@ -3730,8 +3699,9 @@ function expand_typegroup_def(ctx, ex)
             ])
         else
             inner_defs = e.inner_defs
-            map!(inner_defs, inner_defs) do def
-                rewrite_ctor(ctx, def, struct_names[i], global_names[i],
+            for (def_i, def) in enumerate(inner_defs)
+                inner_defs[def_i] =
+                    rewrite_ctor(ctx, def, struct_names[i], global_names[i],
                              e.typevar_names, e.field_types)
             end
             push!(fdef_stmts, @ast ctx e.sdef [K"scope_block"(scope_type=:hard)
@@ -3846,7 +3816,9 @@ function expand_struct_def(ctx, ex, docs)
             if !typevar_in_fields
                 typevar_in_bounds = any(type_params[i+1:end]) do param
                     # Check the bounds of subsequent type params
-                    (_,lb,ub) = analyze_typevar(ctx, param)
+                    (lb,ub) = let bounds = typevar_bounds(ctx, param)
+                        bounds[2], bounds[3]
+                    end
                     # todo: flisp lowering tests `lb` here so we also do. But
                     # in practice this doesn't seem to constrain `typevar_name`
                     # and the generated constructor doesn't work?
@@ -3863,11 +3835,10 @@ function expand_struct_def(ctx, ex, docs)
 
     # For all functions within `struct`, rewrite `new` calls and
     # constructor-like signatures
-    if !isempty(inner_defs)
-        map!(inner_defs, inner_defs) do def
+    for (def_i, def) in enumerate(inner_defs)
+        inner_defs[def_i] =
             rewrite_ctor(ctx, def, struct_name, global_struct_name,
                          typevar_names, field_types)
-        end
     end
 
     # The following lowering covers several subtle issues in the ordering of
@@ -3969,10 +3940,10 @@ end
 # Expand `where` syntax
 
 function expand_where(ctx, srcref, lhs, rhs)
-    bounds = analyze_typevar(ctx, rhs)
+    bounds = typevar_bounds(ctx, rhs)
     v = bounds[1]
     @ast ctx srcref [K"let"
-        [K"block" [K"=" v bounds_to_TypeVar(ctx, srcref, bounds)]]
+        [K"block" [K"=" v bounds_to_typevar(ctx, bounds)]]
         [K"call" "UnionAll"::K"core" v lhs]
     ]
 end
@@ -4009,9 +3980,10 @@ function expand_curly(ctx, ex)
             # `X{<:A}` and `X{>:A}`
             name = @ast ctx e "#T$i"::K"Placeholder"
             i += 1
+            any = @ast ctx ex "Any"::K"core"
             typevar = k == K"<:" ?
-                bounds_to_TypeVar(ctx, e, (name, nothing, e[1])) :
-                bounds_to_TypeVar(ctx, e, (name, e[1], nothing))
+                _bounds_to_typevar(ctx, e, name, any, e[1]) :
+                _bounds_to_typevar(ctx, e, name, e[1], any)
             arg = emit_assign_tmp(typevar_stmts, ctx, typevar)
             push!(implicit_typevars, arg)
         else
