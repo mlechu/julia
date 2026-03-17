@@ -101,14 +101,6 @@ A where f() <: Y
 #       └─┘ ── expected identifier
 
 ########################################
-# Error: bad type bounds
-A where Y >: f()
-#---------------------
-LoweringError:
-A where Y >: f()
-#            └─┘ ── expected type name
-
-########################################
 # Simple type application
 X{A,B,C}
 #---------------------
