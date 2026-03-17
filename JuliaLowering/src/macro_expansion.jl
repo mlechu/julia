@@ -469,15 +469,6 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
-    # elseif k in KSet"function = ->" && numchildren(ex) === 2
-    #     ex1 = mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
-    #     k === K"=" && !is_eventually_call(ex1[1]) && return ex1
-    #
-    #     (is_eventually_call(ex1[1]) && has_if_generated(ex1[2])) || return ex1
-    #     gen = expand_forms_1(ctx, expand_quote(
-    #         ctx, @ast ctx ex1 [K"block" split_generated(ex1[2], true)]))
-    #     nongen = split_generated(ex1[2], false)
-    #     @ast ctx ex1 [K"generated_function" ex1[1] gen nongen]
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
