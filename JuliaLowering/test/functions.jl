@@ -1166,7 +1166,7 @@ end
         """; expr_compat_mode)
 
         @test genfunc_f((1,); kw=1) ==
-                (Tuple{Int64}, Int64, Int64, "gen")
+                (Tuple{Int}, Int, Int, "gen")
         @test_throws UndefKeywordError genfunc_f((1,))
 
         genfunc_f = JL.include_string(test_mod, raw"""
@@ -1179,7 +1179,7 @@ end
         end
         """; expr_compat_mode)
 
-        @test genfunc_f((1,); kw=[1]) == (Tuple{Int64}, Int64, Vector{Int64}, "gen")
+        @test genfunc_f((1,); kw=[1]) == (Tuple{Int}, Int, Vector{Int}, "gen")
         @test_throws UndefKeywordError genfunc_f((1,))
         @test_throws TypeError genfunc_f((1,); kw=1)
 
@@ -1196,7 +1196,7 @@ end
         @test genfunc_f(; kw=1) ==
             (Int, Int, Base.Pairs{Symbol, Union{}, Nothing, @NamedTuple{}}, "gen")
         @test genfunc_f(; kw=1, kw2=2) ==
-            (Int, Int, Base.Pairs{Symbol, Int, Nothing, @NamedTuple{kw2::Int64}}, "gen")
+            (Int, Int, Base.Pairs{Symbol, Int, Nothing, @NamedTuple{kw2::Int}}, "gen")
         @test_throws UndefKeywordError genfunc_f()
     end
 
