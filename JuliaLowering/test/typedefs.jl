@@ -36,7 +36,7 @@ Base.eval(test_mod, :(struct XX{S,T,U,W} end))
     """) == Pair{T, A} where {A, B<:A, A<:C<:B, A<:D<:C, A<:E<:D, A<:T<:E}
     @test JuliaLowering.include_string(test_mod, """
     Vector{T} where (()->U)()<:T<:(()->U)() where (()->Int)()<:U<:(()->Number)()
-    """) == Vector{T} where {Int64<:U<:Number, U<:T<:U}
+    """) == Vector{T} where {Int<:U<:Number, U<:T<:U}
 
     @testset "implicit whereparams" begin
         @test JuliaLowering.include_string(test_mod, """
