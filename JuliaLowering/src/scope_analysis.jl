@@ -147,10 +147,11 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
         declaration_scope = top_scope(ctx)
-        mod = ctx.scope_layers[ex.scope_layer].mod
+        mod = hasattr(ex, :mod) ? ex.mod : ctx.scope_layers[ex.scope_layer].mod
     else
         declaration_scope = scope
-        mod = nothing
+        mod = hasattr(ex, :mod) ?
+            throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
     is_internal = ctx.scope_layers[nk.layer].is_internal || getmeta(ex, :is_internal, false)
     b = _new_binding(ctx, ex, nk.name, bk; mod, is_internal, kws...)
