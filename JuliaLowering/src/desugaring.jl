@@ -84,10 +84,9 @@ end
 # guarantee there's some scope it's declared in, and that it's not declared or
 # used outside of that scope (binding capture is OK).  This is the alternative.
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
-    out = mkleaf(src) # copy over attributes
-    setattr!(out, :kind, unused ? K"Placeholder" : K"Identifier")
+    out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
+    setattr!(out, :meta, get(src, :meta, nothing))
     setattr!(out, :scope_layer, new_scope_layer(ctx))
-    setattr!(out, :name_val, name)
 end
 
 #-------------------------------------------------------------------------------
@@ -2394,13 +2393,22 @@ function assign_sparams(ctx, tvs)
     out
 end
 
-# Needs special handling due to pre-quoted parts of generated function body
+# Hack: Normally just (block ex body), but needs special handling due to
+# pre-quoted parts of generated function body, where we need to prepend
+# desugarable AST to macro AST.  Fortunately there are only two places (meta
+# nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
     @stm body begin
-        [K"_generated_body" [K"quote" gen] nongen] ->
+        [K"_generated_body" [K"quote" gen] nongen] -> begin
+            ex_est = @stm ex begin
+                [K"meta" [K"Symbol"] n] ->
+                    @ast ctx ex [K"meta" "nkw"::K"Identifier" n]
+                [K"block" _...] -> ex # TODO
+                _ -> @jl_assert false (ex, "unexpected prepend_function_body")
+            end
             @ast ctx body [K"_generated_body"
-                [K"quote" [K"block" ex gen]]
-                [K"block" ex nongen]]
+                [K"quote" [K"block" ex_est gen]] [K"block" ex nongen]]
+        end
         _ -> @ast ctx body [K"block" ex body]
     end
 end
@@ -2475,7 +2483,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
             mapsyntax(_untyped_arg, sparams)...,
              mapsyntax(_untyped_arg, argl)...)
         @jl_assert kind(body[1]) === K"quote" body
-        gen_body = expand_quote(ctx, body[1][1])
+        gen_body = est_to_dst(expand_quote(ctx, body[1][1]))
 
         method_def_expr(ctx, src, gen_name, SyntaxList(ctx), gen_argl, gen_body,
                         @ast(ctx, src, "Any"::K"core"))
