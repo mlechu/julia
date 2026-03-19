@@ -315,7 +315,7 @@ end
 split_generated(st::SyntaxTree, gen_part) = @stm st begin
     (_, when=is_leaf(st)||is_quoted(st)) -> st
     [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"$" est_to_dst(gen)])
+        @ast(st._graph, st, [K"$" gen])
     else
         nongen
     end
