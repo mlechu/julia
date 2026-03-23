@@ -338,12 +338,12 @@ end
 
 # Reference to bytes within a source file
 struct SourceRef
-    file::SourceFile
-    first_byte::Int
-    last_byte::Int
+    file::Ref{SourceFile}
+    first_byte::UInt32
+    last_byte::UInt32
 end
 
-sourcefile(src::SourceRef) = src.file
+sourcefile(src::SourceRef) = src.file[]
 byte_range(src::SourceRef) = src.first_byte:src.last_byte
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
@@ -366,7 +366,7 @@ function highlight(io::IO, src::LineNumberNode; note="")
 end
 
 function highlight(io::IO, src::SourceRef; kws...)
-    highlight(io, src.file, first_byte(src):last_byte(src); kws...)
+    highlight(io, sourcefile(src), first_byte(src):last_byte(src); kws...)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
@@ -1198,7 +1198,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
-    sf = SourceFile(stream; filename, first_line)
+    sf = Ref(SourceFile(stream; filename, first_line))
     source = SourceRef(sf, first_byte(stream), last_byte(stream))
     cs = SyntaxList(graph)
     for c in reverse_toplevel_siblings(cursor)
@@ -1214,12 +1214,12 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     return SyntaxTree(graph, id)
 end
 
-function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
+function SyntaxTree(graph::SyntaxGraph, sf::Ref{SourceFile}, cursor::RedTreeCursor)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
                        source=SourceAttrType, value=Any, name_val=String)
     green_id = GC.@preserve sf begin
-        raw_offset, txtbuf = _unsafe_wrap_substring(sf.code)
-        offset = raw_offset - sf.byte_offset
+        raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
+        offset = raw_offset - sf[].byte_offset
         _insert_green(graph, sf, txtbuf, offset, cursor)
     end
     gst = SyntaxTree(graph, green_id)
@@ -1228,7 +1228,7 @@ function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
     return out
 end
 
-function _insert_green(graph::SyntaxGraph, sf::SourceFile,
+function _insert_green(graph::SyntaxGraph, sf::Ref{SourceFile},
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor)
     id = new_id!(graph)
