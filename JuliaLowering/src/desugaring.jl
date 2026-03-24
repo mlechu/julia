@@ -2310,7 +2310,7 @@ end
 function select_used_typevars(uses::SyntaxList, typevars::SyntaxList)
     used = BitVector(undef, length(typevars))
     for (i, tv) in enumerate(typevars)
-        @jl_assert kind(tv) === K"_typevar" v
+        @jl_assert kind(tv) === K"_typevar" tv
         for u in uses
             contains_identifier(u, tv[1]) && (used[i] = true)
         end
@@ -2468,7 +2468,7 @@ end
 function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
-        ctx.mod, "#$(isnothing(mtable) ? "_" : mtable)@generator#")
+        ctx.mod, "#$(is_core_nothing(mtable) ? "_" : mtable)@generator#")
         new_global_binding(ctx, src, mangled, ctx.mod)
     end
 
@@ -2785,12 +2785,13 @@ function lower_destructuring_args!(ctx, args)
     return stmts
 end
 
-# `arg` is the first arg to a function's `call`.  return the method table
-# expression and the typed arg expression `(:: #self# t)`
+# `arg` is the first arg to a function's `call`.  return (1) whether this is an
+# :overlay expression, (2) the method table expression, and (3) the typed arg
+# expression `(:: #self# t)`
 function expand_function_arg1(ctx, arg)
     if kind(arg) === K"overlay"
-        _, x = expand_function_arg1(ctx, arg[2])
-        return arg[1], x
+        _, _, x = expand_function_arg1(ctx, arg[2])
+        return true, arg[1], x
     end
     aname = @stm arg begin
         [K"::" n t] -> n
@@ -2803,13 +2804,14 @@ function expand_function_arg1(ctx, arg)
         [K"::" _ t] -> t
         _ -> @ast ctx arg [K"function_type" arg]
     end
+    # first arg to Expr(:method)
     mt = @stm arg begin
         [K"Identifier"] -> arg
-        [K"Value"] -> arg
+        [K"Value"] -> arg # TODO delete with globalref support
         [K"Placeholder"] -> arg
         _ -> @ast ctx arg "nothing"::K"core"
     end
-    return mt, @ast ctx arg [K"::" aname atype]
+    return false, mt, @ast ctx arg [K"::" aname atype]
 end
 
 fix_argname(ctx, arg, used) = @stm arg begin
@@ -2853,7 +2855,7 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
             body = prepend_function_body(ctx, body, blk)
         end
     end
-    (mtable, a1) = expand_function_arg1(ctx, raw_args[1])
+    (overlay, mtable, a1) = expand_function_arg1(ctx, raw_args[1])
     argl = SyntaxList(a1)
     has_kws = kind(raw_args[end]) === K"parameters" && numchildren(raw_args[end]) > 0
     let force_used = length(pos_opt_args(raw_args)) > 0 || has_kws
@@ -2883,10 +2885,11 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
         keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
     else
         @ast ctx src [K"block"
-            is_core_nothing(mtable) ? nothing : [K"function_decl" mtable]
+            (overlay || is_core_nothing(mtable)) ? nothing : [K"function_decl" mtable]
             [K"method_defs" mtable [K"block"
                 method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
-            [K"removable" mtable]]
+                # TODO: overlay should return the method
+                [K"removable" mtable]]
     end
 end
 

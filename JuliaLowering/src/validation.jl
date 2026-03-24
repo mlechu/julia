@@ -1237,11 +1237,11 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
          vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
 
-    [K"isdefined" x] -> vst1_ident(vcx, x)
+    [K"isdefined" x] -> vst2_ident_val(vcx, x)
     [K"isglobal" [K"Placeholder"]] -> pass()
     [K"islocal" [K"Placeholder"]] -> pass()
-    [K"isglobal" x] -> vst1_ident(vcx, x)
-    [K"islocal" x] -> vst1_ident(vcx, x)
+    [K"isglobal" x] -> vst2_ident_val(vcx, x)
+    [K"islocal" x] -> vst2_ident_val(vcx, x)
     [K"locals"] -> pass()
     _ -> @fail(st, "unrecognized form out of desugaring")
 end

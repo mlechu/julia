@@ -1444,3 +1444,32 @@ end
     end
     """) == [0,4,6,0]
 end
+
+@testset "method table overlays" begin
+    OverlayModule = Module()
+
+    @eval OverlayModule Base.Experimental.@MethodTable mt
+    @test_broken JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay mt function sin(x::Float64); 1; end
+    """) isa Method
+    @test_broken JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay mt cos(x::Float64) = 2
+    """) isa Method
+    @test_broken JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay mt tan(x::T) where {T} = 3
+    """) isa Method
+
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
+        @test only(ms).method.module === Base.Math
+    end
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+        @test only(ms).method.module === OverlayModule
+    end
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
+        @test isempty(ms)
+    end
+
+end
