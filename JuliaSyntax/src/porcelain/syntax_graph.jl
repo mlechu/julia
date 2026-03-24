@@ -338,13 +338,15 @@ end
 
 # Reference to bytes within a source file
 struct SourceRef
-    file::Ref{SourceFile}
+    file::Base.RefValue{SourceFile}
     first_byte::UInt32
     last_byte::UInt32
 end
 
 sourcefile(src::SourceRef) = src.file[]
-byte_range(src::SourceRef) = src.first_byte:src.last_byte
+first_byte(src::SourceRef) = Int(src.first_byte)
+last_byte(src::SourceRef) = Int(src.last_byte)
+byte_range(src::SourceRef) = first_byte(src):last_byte(src)
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
@@ -1198,7 +1200,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
-    sf = Ref(SourceFile(stream; filename, first_line))
+    sf = Base.RefValue(SourceFile(stream; filename, first_line))
     source = SourceRef(sf, first_byte(stream), last_byte(stream))
     cs = SyntaxList(graph)
     for c in reverse_toplevel_siblings(cursor)
