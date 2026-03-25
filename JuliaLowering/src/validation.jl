@@ -519,7 +519,7 @@ vst1_symdecl(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
-# TODO: globalref (identifer with .mod) might not be valid everywhere; check
+# TODO: globalref (identifier with .mod) might not be valid everywhere; check
 # usage of this function
 vst1_ident(vcx, st; lhs=false) = @stm st begin
     [K"Identifier"] -> _ident_str(vcx, st, st.name_val; lhs)
