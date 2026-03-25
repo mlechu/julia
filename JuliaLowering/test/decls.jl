@@ -497,7 +497,7 @@ end
     end
 end
 
-module gr_mod end
+gr_mod = Module()
 
 @testset "GlobalRef as an identifier" begin
     # gr = 1
@@ -624,6 +624,28 @@ module gr_mod end
     @test getproperty(gr_mod, sym)(0;kw1=1,kw2=20) == (0,1,20)
     @test !Base.isdefinedglobal(test_mod, sym)
 
+    # gr inner function (let) should act like global inner function
+    @gensym sym
+    @test jl_eval(
+        test_mod,
+        Expr(:let,
+             Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, 2)),
+             Expr(:block,
+                  Expr(:function, Expr(:call, GlobalRef(gr_mod, sym), :c),
+                       Expr(:block, Expr(:tuple, :a, :b, :c)))))) isa Function
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test getproperty(gr_mod, sym)(3) == (1,2,3)
+
+    # error: gr inner function (function) should act like global inner function
+    @gensym sym outer_f
+    @test_throws LoweringError jl_eval(
+        test_mod,
+        Expr(:function, Expr(:call, outer_f),
+             Expr(:block,
+                  Expr(:function, Expr(:call, GlobalRef(gr_mod, sym)),
+                       Expr(:block)))))
+
     # error: begin; local gr = 1; end
     # (note: flisp allows this)
     @gensym sym
@@ -648,7 +670,15 @@ module gr_mod end
         test_mod, Expr(:for,
                        Expr(:(=), GlobalRef(gr_mod, sym),
                             Expr(:call, :(:), 1, 3)),
-                       Expr(:block, nothing)))
+                       Expr(:block)))
+
+    # error: function f(gr); end
+    @gensym sym
+    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+        test_mod, Expr(:function,
+                       Expr(:call, :fname, GlobalRef(gr_mod, sym)),
+                       Expr(:block)))
+
 
     # error: try/catch with GlobalRef catch var
     @gensym sym
