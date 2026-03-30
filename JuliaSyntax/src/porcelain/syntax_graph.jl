@@ -17,19 +17,6 @@ SyntaxGraph() = ensure_required_attributes!(
         Vector{UnitRange{Int}}(),
         Vector{NodeId}(), Dict{Symbol,Dict{NodeId, Any}}()))
 
-# "Freeze" attribute names and types, encoding them in the type of the returned
-# SyntaxGraph.
-function freeze_attrs(graph::SyntaxGraph)
-    frozen_attrs = (; pairs(graph.attributes)...)
-    SyntaxGraph(graph.edge_ranges, graph.edges, frozen_attrs)
-end
-
-# Create a copy of `graph` where the attribute list is mutable
-function unfreeze_attrs(graph::SyntaxGraph)
-    unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
-    SyntaxGraph(graph.edge_ranges, graph.edges, unfrozen_attrs)
-end
-
 function _show_attrs(io, attributes::Dict)
     show(io, MIME("text/plain"), attributes)
 end
@@ -70,7 +57,7 @@ end
 
 function ensure_attributes!(graph::SyntaxGraph{<:NamedTuple}; kws...)
     throw(ErrorException("""
-        ensure_attributes!: $k is not an existing attribute, and the graph's attributes are frozen. \
+        ensure_attributes!: The graph's attributes are frozen. \
         Consider calling non-mutating `ensure_attributes` instead."""))
 end
 
@@ -109,7 +96,7 @@ end
 function delete_attributes(graph::SyntaxGraph{<:NamedTuple}, attr_names::Symbol...)
     unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
     for name in attr_names
-        delete!(graph.attributes, name)
+        delete!(unfrozen_attrs, name)
     end
     SyntaxGraph(graph.edge_ranges, graph.edges, (; pairs(unfrozen_attrs)...))
 end
@@ -858,7 +845,7 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
             push!(nodes1, c1)
         end
     end
-    graph2.edges = 1:length(nodes1) # our reward for unaliasing
+    append!(graph2.edges, 1:length(nodes1)) # our reward for unaliasing
 
     for attr in attrnames(graph1)
         attr === :source && continue
@@ -905,7 +892,7 @@ end
 Give each descendent of `st` a `parent::NodeId` attribute.
 """
 function annotate_parent!(st::SyntaxTree)
-    g = unfreeze_attrs(syntax_graph(st))
+    g = syntax_graph(st)
     st = unalias_nodes(SyntaxTree(g, st._id))
     ensure_attributes!(g; parent=NodeId)
     mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
