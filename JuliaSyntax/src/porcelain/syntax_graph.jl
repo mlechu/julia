@@ -133,6 +133,8 @@ function child(graph::SyntaxGraph, id::NodeId, i::Integer)
     graph.edges[graph.edge_ranges[id][i]]
 end
 
+# XXX: the @noinline (and the one on setattr!) work around an issue where
+# codegen produces a trampoline for `getindex`
 @noinline function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
     getfield(graph, :attributes)[name]
 end
