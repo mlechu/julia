@@ -512,7 +512,7 @@ function est_to_dst(st::SyntaxTree)
                 @ast g st [K"meta" s=>K"Symbol"]
             elseif length(vs) === 1
                 out = est_to_dst(vs[1])
-                setmeta(out, Symbol(s), true)
+                setmeta(out, Symbol(s.name_val), true)
             else
                 # Kick the can down the road (should only be simple atoms?)
                 out_cs = SyntaxList(g)
