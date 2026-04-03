@@ -30,8 +30,8 @@ function _get_inner_lnn(e::Expr, default::LineNumberNode)
     e.head in (:function, :macro, :module, :(=)) || return default
     length(e.args) >= 2 || return default
     b = e.args[end]
-    b isa Expr && b.head === :block || return default
-    b::Expr # inference TODO
+    b isa Expr || return default
+    b.head === :block || return default
     length(b.args) >= 1 || return default
     b_lnn = b.args[1]
     return b_lnn isa LineNumberNode ? b_lnn : default
