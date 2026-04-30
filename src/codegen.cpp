@@ -9295,8 +9295,8 @@ static jl_llvm_functions_t
     std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
     auto update_lineinfo = [&] (size_t pc) {
-        std::function<bool(jl_debuginfo_t*, jl_value_t*, size_t, size_t)> append_lineinfo =
-                [&] (jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to, size_t pc) -> bool {
+        std::function<bool(jl_debuginfo_t*, jl_value_t*, size_t, size_t, size_t)> append_lineinfo =
+            [&] (jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to, size_t pc, size_t origpc) -> bool {
             while (1) {
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
@@ -9308,7 +9308,7 @@ static jl_llvm_functions_t
                     return false;
                 if (pc > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
                     // indirection node
-                    if (!append_lineinfo(debuginfo->linetable, func, to, i))
+                    if (!append_lineinfo(debuginfo->linetable, func, to, i, origpc))
                         return false; // no update
                 }
                 else {
@@ -9337,8 +9337,9 @@ static jl_llvm_functions_t
                         StringRef fname = jl_debuginfo_name(func);
                         // Encode the 1-based statement index into the DWARF column field so that
                         // stacktraces can recover the exact PC that each inlined frame points at.
-                        // `pc` here is the 1-based statement index within `debuginfo`'s CodeInfo.
-                        unsigned col = (unsigned)pc;
+                        // `origpc` here is the 1-based statement index within either `src`'s
+                        // debuginfo, or some debuginfo in a `.edges` array.
+                        unsigned col = (unsigned)origpc;
                         if (new_lineinfo.empty() && info.file == ctx.file) { // if everything matches, emit a toplevel line number
                             info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
                         }
@@ -9369,14 +9370,14 @@ static jl_llvm_functions_t
                 to = lineidx.to;
                 if (to == 0)
                     return true;
-                pc = lineidx.pc;
+                pc = origpc = lineidx.pc;
                 debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, to - 1);
                 func = NULL;
             }
         };
         prev_lineinfo.truncate(0);
         std::swap(prev_lineinfo, new_lineinfo);
-        bool updated = append_lineinfo(src->debuginfo, (jl_value_t*)lam, 0, pc + 1);
+        bool updated = append_lineinfo(src->debuginfo, (jl_value_t*)lam, 0, pc + 1, pc + 1);
         if (!updated)
             std::swap(prev_lineinfo, new_lineinfo);
         else
