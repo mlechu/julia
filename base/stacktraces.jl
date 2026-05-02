@@ -74,12 +74,13 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
     "if !from_c, 1-based statement index (PC) within the frame's CodeInfo, or 0 if unavailable"
     pc::Int
+    debuginfo::Union{Core.DebugInfo, Nothing}
 end
 
 StackFrame(func, file, line, linfo, from_c, inlined, pointer) =
-    StackFrame(func, file, line, linfo, from_c, inlined, pointer, 0)
+    StackFrame(func, file, line, linfo, from_c, inlined, pointer, 0, nothing)
 StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
-                                          nothing, false, false, 0, 0)
+                                          nothing, false, false, 0, 0, nothing)
 
 """
     StackTrace
@@ -132,7 +133,7 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
     ninfos = length(infos)
     res = Vector{StackFrame}(undef, ninfos)
-    local debuginfo = false
+    local debuginfo = nothing
     local parent_pc = 0
     for i = ninfos:-1:1
         info = infos[i]::Core.SimpleVector
@@ -143,10 +144,8 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
         linfo = info[4]
         pc = info[7]::Int
         if linfo isa Core.CodeInstance
-            if debuginfo === false
+            if isnothing(debuginfo) && isdefined(linfo, :debuginfo)
                 debuginfo = linfo.debuginfo
-            else
-                debuginfo = true
             end
             linfo = linfo.def
         elseif debuginfo isa Core.DebugInfo && parent_pc > 0
@@ -159,12 +158,11 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
                 if !(def isa Symbol)
                     linfo = def
                 end
-            else
-                debuginfo = true
             end
         end
         parent_pc = pc
-        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer, pc)
+        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool,
+                            info[6]::Bool, pointer, pc, debuginfo)
     end
     return res
 end
@@ -211,7 +209,7 @@ function lookup(ip::Base.InterpreterIP)
     scopes = IRShow.LineInfoNode[]
     IRShow.append_scopes!(scopes, pc, codeinfo.debuginfo, def)
     if isempty(scopes)
-        return [StackFrame(func, file, line, code, false, false, 0)]
+        return [StackFrame(func, file, line, code, false, false, 0, pc, codeinfo.debuginfo)]
     end
     res = Vector{StackFrame}(undef, length(scopes))
     inlined = false
@@ -225,7 +223,7 @@ function lookup(ip::Base.InterpreterIP)
             def_local = codeinfo
         end
         res[i] = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line,
-            def_local, false, inlined, 0)
+            def_local, false, inlined, 0, pc, codeinfo.debuginfo)
         inlined = true
     end
     return res
@@ -307,6 +305,37 @@ function frame_mi(lkup::StackFrame)
     return code
 end
 
+# all 1-based; 0 if unavailable
+struct FrameLoc
+    byte1::Int
+    byte2::Int
+    col1::Int # offset from beginning of `line`
+    col2::Int
+    line1::Int
+    line2::Int
+end
+
+function frame_location(frame::StackFrame)
+    if frame.from_c
+        FrameLoc(0,0,frame.pc,0,frame.line,0)
+    elseif isnothing(frame.debuginfo) || frame.pc == 0
+        FrameLoc(0,0,0,0,frame.line,0)
+    else
+        di = frame.debuginfo
+        (line1, col1) = @ccall(jl_cdi_firstxy(
+            di::Any, frame.pc::Int32)::NTuple{2, Int32})
+        if col1 < 0
+            FrameLoc(0,0,0,0,frame.line,0) # use fl's line?
+        else
+            (byte1, byte2) = @ccall(jl_cdi_bytespan(
+                di::Any, frame.pc::Int32)::NTuple{2, Int32})
+            (line2, col2) = @ccall(jl_cdi_byte_to_xy(
+                di::Any, byte2::Int32)::NTuple{2, Int32})
+            FrameLoc(byte1, byte2, col1, col2, line1, line2)
+        end
+    end
+end
+
 function show_spec_linfo(io::IO, frame::StackFrame)
     linfo = frame.linfo
     if linfo === nothing
@@ -383,10 +412,15 @@ function show(io::IO, frame::StackFrame)
         file_info = basename(string(frame.file))
         print(io, " at ")
         print(io, file_info, ":")
-        if frame.line >= 0
-            print(io, frame.line)
+        fl = frame_location(frame)
+        if fl.line1 >= 0
+            print(io, fl.line1)
         else
             print(io, "?")
+        end
+        if fl.col1 != 0
+            print(io, ":")
+            print(io, fl.col1)
         end
     end
     if frame.inlined

@@ -621,7 +621,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
 
             m = parentmodule_before_main(method)
             modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-            print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
+            print_module_path_file(iob, m, string(file), line, 0; modulecolor, digit_align_width = 3)
             push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
@@ -824,7 +824,8 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor; prefix = nothing)
-    file, line = string(frame.file), frame.line
+    file = string(frame.file)
+    fl = StackTraces.frame_location(frame)
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -857,13 +858,36 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
+    print_module_path_file(
+        io, modul, file, fl.line1, fl.col1;
+        modulecolor, digit_align_width = digit_align_width - 1)
+
+    # (just for fun) file contents
+    if fl.col1 != 0 && !isempty(file) && !frame.from_c
+        try
+            open(file) do fd
+                seek(fd, fl.byte1-fl.col1)
+                source_str = String(readline(fd))
+                print(io, "\n")
+                printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
+                printstyled(io, source_str; color=:light_black)
+                print(io, "\n")
+                printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
+                for i in eachindex(source_str)
+                    printstyled(io, 1 <= i - (fl.col1-1) <= (fl.byte2+1) - fl.byte1 ? '^' : ' '; color=:red)
+                end
+            end
+        catch e
+
+        end
+    end
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+function print_module_path_file(io, modul, file, line, col;
+                                modulecolor = :light_black, digit_align_width = 0)
     printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
@@ -880,8 +904,9 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     dir = dirname(file)
     !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
 
-    # filename, separator, line
+    # filename, separator, line, column if available
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    col != 0 && printstyled(io, ":", col; color = :light_black, underline = true)
 end
 
 #=
