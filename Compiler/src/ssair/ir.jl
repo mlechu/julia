@@ -179,7 +179,7 @@ end
 # mutable version of the compressed DebugInfo
 mutable struct DebugInfoStream
     def::Union{MethodInstance,Symbol,Nothing}
-    linetable::Union{Nothing,DebugInfo}
+    linetable::Union{Nothing,DebugInfo,String}
     edges::Vector{DebugInfo}
     firstline::Int32 # the starting line for this block (specified by having an index of 0)
     codelocs::Vector{Int32} # for each statement:

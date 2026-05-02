@@ -384,6 +384,7 @@ function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
         debuginfo = linetable
         linetable = debuginfo.linetable
     end
+    linetable isa String && return 0 # TODO
     codeloc = getdebugidx(debuginfo, 0)
     return debuginfo_file1(debuginfo), codeloc[1]
 end
@@ -410,6 +411,8 @@ function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, debuginfo, @nospe
         if debuginfo.linetable === nothing || pc <= 0 || line < 0
             line < 0 && (doupdate = false; line = 0) # broken debug info
             push!(scopes, LineInfoNode(def, debuginfo_file1(debuginfo), Int32(line)))
+        elseif debuginfo.linetable isa String
+
         else
             doupdate = append_scopes!(scopes, line, debuginfo.linetable::DebugInfo, def) && doupdate
         end
