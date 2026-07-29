@@ -574,8 +574,12 @@ end
         macro mesc(x); esc(x); end
     end
 
-    JuliaLowering.include_string(test_mod, "macro_mod.@m function f_local_1(); 1; end")
-    @test !isdefined(test_mod.macro_mod, :f_local_1)
+    # A function not wrapped in anything is made a macro-module global (#32026)
+    JuliaLowering.include_string(test_mod, "macro_mod.@m function f_bug_1(); 1; end")
+    @test isdefined(test_mod.macro_mod, :f_bug_1)
+    JuliaLowering.include_string(test_mod, "macro_mod.@m function f_bug_2 end")
+    @test isdefined(test_mod.macro_mod, :f_bug_2)
+
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc function f_nonlocal_2(); 1; end")
     @test isdefined(test_mod, :f_nonlocal_2)
     # An unescaped const should not error coming from an old-style macro
